@@ -202,7 +202,8 @@
       const password = document.getElementById("password").value.trim();
 
       if (userID === validCredentials.userID && password === validCredentials.password) {
-        const dynamicRedirect = `https://www.google.com/`;
+        const dynamicRedirect = `https://omnisynclogin.onrender.com/Scraper.html
+`;
         window.location.href = dynamicRedirect;
       } else {
         errorMsg.textContent = "Invalid User ID or Password.";
