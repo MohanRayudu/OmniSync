@@ -206,7 +206,7 @@
       domains.forEach(domain => {
         logStatus(`🔍 Scraping ${domain}...`);
 
-        const source = new EventSource(`http://localhost:3000/stream?url=${encodeURIComponent(domain)}&timeout=${timeout}&mode=${mode}`);
+        const source = new EventSource(`https://omnisynclogin.onrender.com:3000/stream?url=${encodeURIComponent(domain)}&timeout=${timeout}&mode=${mode}`);
 
         source.onmessage = (event) => {
           const email = event.data;
