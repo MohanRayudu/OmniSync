@@ -41,5 +41,5 @@ app.get('/stream', (req, res) => {
 });
 
 app.listen(3000, () => {
-  console.log('✅ Server running at http://localhost:3000');
+  console.log('✅ Server running at http://https://omnisynclogin.onrender.com:3000');
 });
