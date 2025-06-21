@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Email Scraper / Domain Extractor</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .main-container {
+      display: flex;
+      gap: 20px;
+    }
+
+    .left-panel, .right-panel {
+      flex: 1;
+      max-width: 50%;
+    }
+
+    .right-panel {
+      border-left: 2px solid #ccc;
+      padding-left: 20px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .status-bar {
+      margin-top: 20px;
+      padding: 10px;
+      background: #f0f0f0;
+      border-top: 2px solid #ccc;
+      font-size: 14px;
+    }
+
+    textarea {
+      width: 100%;
+    }
+
+    button {
+      padding: 10px 20px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .email-item {
+      background: #e7f4e4;
+      padding: 5px;
+      margin: 2px 0;
+      border-left: 4px solid green;
+    }
+
+    .status-log {
+      font-family: monospace;
+      color: #444;
+      background: #f9f9f9;
+      padding: 10px;
+      border: 1px solid #ccc;
+      max-height: 300px;
+      overflow-y: auto;
+      margin-top: 10px;
+    }
+
+    .status-line {
+      padding: 3px 0;
+      border-bottom: 1px dashed #ddd;
+    }
+
+    .hidden {
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <h2>Email Scraper / Domain Extractor</h2>
+
+  <div class="main-container">
+    <div class="left-panel">
+      <textarea id="domainInput" placeholder="Enter domains, one per line..." rows="6"></textarea><br><br>
+
+      <label for="modeSelect">Mode:</label>
+      <select id="modeSelect" onchange="toggleModeUI()">
+        <option value="email">Email Scraping</option>
+        <option value="domain">Domain Extraction</option>
+      </select>
+      <br><br>
+
+      <label for="timeout">Timeout per domain (minutes):</label>
+      <input type="number" id="timeout" value="5" min="1" style="width: 60px;" />
+      <br><br>
+
+      <button onclick="startScraping()">Start</button>
+
+      <h3>Status</h3>
+      <div class="status-log" id="statusLog"></div>
+    </div>
+
+    <div class="right-panel">
+      <!-- Email Results Panel -->
+      <div id="emailPanel">
+        <h3>Live Scraped Emails</h3>
+        <ul id="emailList"></ul>
+        <br>
+        <button onclick="copyEmailsToClipboard()">Copy All Emails</button>
+      </div>
+
+      <!-- Domain Results Panel -->
+      <div id="domainPanel" class="hidden">
+        <h3>Extracted Domains</h3>
+        <ul id="domainList"></ul>
+        <br>
+        <button onclick="copyDomainsToClipboard()">Copy All Domains</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="status-bar" id="statusBar">
+    Idle
+  </div>
+
+  <progress id="progressBar" value="0" max="100" style="width: 100%; margin-top: 10px;"></progress>
+
+  <script>
+    function toggleModeUI() {
+      const mode = document.getElementById('modeSelect').value;
+      const emailPanel = document.getElementById('emailPanel');
+      const domainPanel = document.getElementById('domainPanel');
+      if (mode === 'email') {
+        emailPanel.classList.remove('hidden');
+        domainPanel.classList.add('hidden');
+      } else {
+        emailPanel.classList.add('hidden');
+        domainPanel.classList.remove('hidden');
+      }
+    }
+
+    async function startScraping() {
+      const domainInput = document.getElementById('domainInput').value.trim();
+      const timeout = parseInt(document.getElementById('timeout').value || '5');
+      const emailList = document.getElementById('emailList');
+      const domainList = document.getElementById('domainList');
+      const statusLog = document.getElementById('statusLog');
+      const statusBar = document.getElementById('statusBar');
+      const progressBar = document.getElementById('progressBar');
+      const mode = document.getElementById('modeSelect').value;
+
+      emailList.innerHTML = '';
+      domainList.innerHTML = '';
+      statusLog.innerHTML = '';
+      statusBar.textContent = 'Starting...';
+
+      const domains = domainInput
+        .split('\n')
+        .map(d => d.trim())
+        .filter(d => d.length > 0);
+
+      let completedCount = 0;
+      progressBar.max = domains.length;
+      progressBar.value = 0;
+
+      // Mode: Domain Extraction
+     if (mode === 'domain') {
+  domains.forEach(company => {
+    logStatus(`🔍 Looking up domain for: ${company}`);
+
+    const source = new EventSource(`http://localhost:3000/stream?url=${encodeURIComponent(company)}&mode=domain`);
+
+    source.onmessage = (event) => {
+      const domain = event.data;
+      const li = document.createElement('li');
+      li.textContent = domain;
+      li.classList.add('email-item');
+      domainList.appendChild(li);
+    };
+
+    source.onerror = (err) => {
+      logStatus(`❌ Error looking up ${company}: ${err.message || 'Unknown error'}`);
+      source.close();
+      updateProgress();
+    };
+
+    source.addEventListener('done', () => {
+      logStatus(`✅ Done with ${company}`);
+      source.close();
+      updateProgress();
+    });
+  });
+
+  return;
+}
+
+      // Mode: Email Scraping
+      domains.forEach(domain => {
+        logStatus(`🔍 Scraping ${domain}...`);
+
+        const source = new EventSource(`http://localhost:3000/stream?url=${encodeURIComponent(domain)}&timeout=${timeout}&mode=${mode}`);
+
+        source.onmessage = (event) => {
+          const email = event.data;
+          const li = document.createElement('li');
+          li.textContent = email;
+          li.classList.add('email-item');
+          emailList.appendChild(li);
+        };
+
+        source.onerror = (err) => {
+          logStatus(`❌ Error scraping ${domain}: ${err.message || 'Unknown error'}`);
+          source.close();
+          updateProgress();
+        };
+
+        source.addEventListener('done', () => {
+          logStatus(`✅ Done with ${domain}`);
+          source.close();
+          updateProgress();
+        });
+      });
+
+      function updateProgress() {
+        completedCount++;
+        progressBar.value = completedCount;
+        if (completedCount === domains.length) {
+          statusBar.textContent = 'All domains processed.';
+        }
+      }
+    }
+
+    function copyEmailsToClipboard() {
+      const emails = Array.from(document.querySelectorAll('#emailList .email-item')).map(el => el.textContent);
+      const text = emails.join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        alert('✅ Emails copied to clipboard!');
+      }).catch(() => {
+        alert('❌ Failed to copy emails.');
+      });
+    }
+
+    function copyDomainsToClipboard() {
+      const domains = Array.from(document.querySelectorAll('#domainList .email-item')).map(el => el.textContent);
+      const text = domains.join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        alert('✅ Domains copied to clipboard!');
+      }).catch(() => {
+        alert('❌ Failed to copy domains.');
+      });
+    }
+
+    function logStatus(message) {
+      const log = document.getElementById('statusLog');
+      const p = document.createElement('div');
+      p.className = 'status-line';
+      p.textContent = message;
+      log.appendChild(p);
+    }
+
+    // Initialize correct panel on load
+    toggleModeUI();
+  </script>
+</body>
+</html>
